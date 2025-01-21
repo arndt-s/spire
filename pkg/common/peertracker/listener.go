@@ -68,6 +68,13 @@ func (l *Listener) Accept() (net.Conn, error) {
 			},
 		}
 
+		if unixConn, ok := conn.(*net.UnixConn); ok {
+			return &UnixConn{
+				Conn:     wrappedConn,
+				unixConn: unixConn,
+			}, nil
+		}
+
 		return wrappedConn, nil
 	}
 }

@@ -16,8 +16,9 @@ type CallerInfo struct {
 }
 
 type AuthInfo struct {
-	Caller  CallerInfo
-	Watcher Watcher
+	Caller     CallerInfo
+	OnBehalfOf *CallerInfo
+	Watcher    Watcher
 }
 
 // AuthType returns the authentication type and allows us to

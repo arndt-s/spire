@@ -35,7 +35,7 @@ func RegisterService(s *grpc.Server, service *Service) {
 }
 
 type attestor interface {
-	Attest(ctx context.Context) ([]*common.Selector, error)
+	Attest(ctx context.Context) ([]*common.Selector, []*common.Selector, error)
 }
 
 type Config struct {
@@ -81,7 +81,7 @@ func (s *Service) isCallerAuthorized(ctx context.Context, log logrus.FieldLogger
 	callerSelectors := cachedSelectors
 
 	if callerSelectors == nil {
-		callerSelectors, err = s.peerAttestor.Attest(ctx)
+		callerSelectors, _, err = s.peerAttestor.Attest(ctx)
 		if err != nil {
 			log.WithError(err).Error("Workload attestation failed")
 			return nil, status.Error(codes.Internal, "workload attestation failed")

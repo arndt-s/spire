@@ -861,8 +861,8 @@ type FakeAttestor struct {
 	err       error
 }
 
-func (fa FakeAttestor) Attest(context.Context) ([]*common.Selector, error) {
-	return fa.selectors, fa.err
+func (fa FakeAttestor) Attest(context.Context) ([]*common.Selector, []*common.Selector, error) {
+	return fa.selectors, nil, fa.err
 }
 
 type FakeWorkloadPIDAttestor struct {

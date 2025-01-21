@@ -1653,8 +1653,8 @@ type FakeAttestor struct {
 	err       error
 }
 
-func (a *FakeAttestor) Attest(context.Context) ([]*common.Selector, error) {
-	return a.selectors, a.err
+func (a *FakeAttestor) Attest(context.Context) ([]*common.Selector, []*common.Selector, error) {
+	return a.selectors, nil, a.err
 }
 
 func identityFromX509SVID(svid *x509svid.SVID, entryID string) cache.Identity {

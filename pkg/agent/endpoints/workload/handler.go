@@ -37,7 +37,7 @@ type Manager interface {
 }
 
 type Attestor interface {
-	Attest(ctx context.Context) ([]*common.Selector, error)
+	Attest(ctx context.Context) ([]*common.Selector, []*common.Selector, error)
 }
 
 type Config struct {
@@ -46,6 +46,8 @@ type Config struct {
 	AllowUnauthenticatedVerifiers bool
 	AllowedForeignJWTClaims       map[string]struct{}
 	TrustDomain                   spiffeid.TrustDomain
+
+	AuthorizedDelegates []string
 }
 
 // Handler implements the Workload API interface
@@ -76,7 +78,7 @@ func (h *Handler) FetchJWTSVID(ctx context.Context, req *workload.JWTSVIDRequest
 		}
 	}
 
-	selectors, err := h.c.Attestor.Attest(ctx)
+	selectors, _, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return nil, err
@@ -115,7 +117,7 @@ func (h *Handler) FetchJWTBundles(_ *workload.JWTBundlesRequest, stream workload
 	ctx := stream.Context()
 	log := rpccontext.Logger(ctx)
 
-	selectors, err := h.c.Attestor.Attest(ctx)
+	selectors, _, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return err
@@ -155,7 +157,7 @@ func (h *Handler) ValidateJWTSVID(ctx context.Context, req *workload.ValidateJWT
 
 	log = log.WithField(telemetry.Audience, req.Audience)
 
-	selectors, err := h.c.Attestor.Attest(ctx)
+	selectors, _, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return nil, err
@@ -212,10 +214,16 @@ func (h *Handler) FetchX509SVID(_ *workload.X509SVIDRequest, stream workload.Spi
 	ctx := stream.Context()
 	log := rpccontext.Logger(ctx)
 
-	selectors, err := h.c.Attestor.Attest(ctx)
+	selectors, brokerSelectors, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return err
+	}
+
+	if brokerSelectors != nil {
+		if err := h.authorizeBroker(log, brokerSelectors); err != nil {
+			return err
+		}
 	}
 
 	subscriber, err := h.c.Manager.SubscribeToCacheChanges(ctx, selectors)
@@ -246,7 +254,7 @@ func (h *Handler) FetchX509Bundles(_ *workload.X509BundlesRequest, stream worklo
 	ctx := stream.Context()
 	log := rpccontext.Logger(ctx)
 
-	selectors, err := h.c.Attestor.Attest(ctx)
+	selectors, _, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return err
@@ -274,6 +282,35 @@ func (h *Handler) FetchX509Bundles(_ *workload.X509BundlesRequest, stream worklo
 			return nil
 		}
 	}
+}
+
+func (h *Handler) authorizeBroker(log logrus.FieldLogger, selectors []*common.Selector) error {
+	if len(selectors) == 0 {
+		log.Error("Broker attestation failed: no selectors")
+		return status.Error(codes.PermissionDenied, "broker attestation failed: no selectors")
+	}
+
+	entries := h.c.Manager.MatchingRegistrationEntries(selectors)
+	entries = filterRegistrations(entries, log)
+
+	if len(entries) == 0 {
+		log.Error("Broker attestation failed: no matching registration entries")
+		return status.Error(codes.PermissionDenied, "broker attestation failed: no matching registration entries")
+	}
+
+	brokerIdentities := make(map[string]struct{})
+	for _, entry := range entries {
+		brokerIdentities[entry.SpiffeId] = struct{}{}
+	}
+
+	for _, authorizedDelegate := range h.c.AuthorizedDelegates {
+		if _, ok := brokerIdentities[authorizedDelegate]; ok {
+			return nil
+		}
+	}
+
+	log.Error("Broker attestation failed: broker is not authorized")
+	return status.Error(codes.PermissionDenied, "broker attestation failed: broker is not authorized")
 }
 
 func (h *Handler) fetchJWTSVID(ctx context.Context, log logrus.FieldLogger, entry *common.RegistrationEntry, audience []string) (*workload.JWTSVID, error) {

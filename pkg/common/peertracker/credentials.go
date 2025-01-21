@@ -64,6 +64,19 @@ func CallerFromContext(ctx context.Context) (CallerInfo, bool) {
 	return ai.Caller, true
 }
 
+func OnBehalfOfFromContext(ctx context.Context) (CallerInfo, bool) {
+	ai, ok := AuthInfoFromContext(ctx)
+	if !ok {
+		return CallerInfo{}, false
+	}
+
+	if ai.OnBehalfOf == nil {
+		return CallerInfo{}, false
+	}
+
+	return *ai.OnBehalfOf, true
+}
+
 func AuthInfoFromContext(ctx context.Context) (AuthInfo, bool) {
 	peer, ok := peer.FromContext(ctx)
 	if !ok {

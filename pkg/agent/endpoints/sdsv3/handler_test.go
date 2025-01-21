@@ -1312,8 +1312,8 @@ func (h *handlerTest) sendAndWait(stream secret_v3.SecretDiscoveryService_Stream
 
 type FakeAttestor []*common.Selector
 
-func (a FakeAttestor) Attest(context.Context) ([]*common.Selector, error) {
-	return ([]*common.Selector)(a), nil
+func (a FakeAttestor) Attest(context.Context) ([]*common.Selector, []*common.Selector, error) {
+	return ([]*common.Selector)(a), nil, nil
 }
 
 type FakeManager struct {

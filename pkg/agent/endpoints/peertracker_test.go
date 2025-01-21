@@ -17,19 +17,19 @@ import (
 func TestPeerTrackerAttestor(t *testing.T) {
 	attestor := PeerTrackerAttestor{Attestor: FakeAttestor{}}
 	t.Run("requires peertracker watcher on context", func(t *testing.T) {
-		selectors, err := attestor.Attest(context.Background())
+		selectors, _, err := attestor.Attest(context.Background())
 		spiretest.AssertGRPCStatus(t, err, codes.Internal, "peer tracker watcher missing from context")
 		assert.Empty(t, selectors)
 	})
 
 	t.Run("fails if peer is not alive", func(t *testing.T) {
-		selectors, err := attestor.Attest(WithFakeWatcher(false))
+		selectors, _, err := attestor.Attest(WithFakeWatcher(false))
 		spiretest.AssertGRPCStatus(t, err, codes.Unauthenticated, "could not verify existence of the original caller: dead")
 		assert.Empty(t, selectors)
 	})
 
 	t.Run("succeeds if peer is alive", func(t *testing.T) {
-		selectors, err := attestor.Attest(WithFakeWatcher(true))
+		selectors, _, err := attestor.Attest(WithFakeWatcher(true))
 		assert.NoError(t, err)
 		assert.Equal(t, []*common.Selector{{Type: "Type", Value: "Value"}}, selectors)
 	})

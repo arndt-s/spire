@@ -288,7 +288,7 @@ type FakeHealthServer struct {
 
 func attest(ctx context.Context, attestor PeerTrackerAttestor) error {
 	log := rpccontext.Logger(ctx)
-	selectors, err := attestor.Attest(ctx)
+	selectors, _, err := attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Failed to attest")
 		return err
