@@ -16,17 +16,17 @@ func NewCredentials() credentials.TransportCredentials {
 
 func (c *grpcCredentials) ClientHandshake(_ context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	conn.Close()
-	return conn, AuthInfo{}, ErrInvalidConnection
+	return conn, &AuthInfo{}, ErrInvalidConnection
 }
 
 func (c *grpcCredentials) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	wrappedCon, ok := conn.(*Conn)
 	if !ok {
 		conn.Close()
-		return conn, AuthInfo{}, ErrInvalidConnection
+		return conn, &AuthInfo{}, ErrInvalidConnection
 	}
 
-	return wrappedCon, wrappedCon.Info, nil
+	return wrappedCon, wrappedCon.Info(), nil
 }
 
 func (c *grpcCredentials) Info() credentials.ProtocolInfo {
@@ -83,6 +83,10 @@ func AuthInfoFromContext(ctx context.Context) (AuthInfo, bool) {
 		return AuthInfo{}, false
 	}
 
-	ai, ok := peer.AuthInfo.(AuthInfo)
-	return ai, ok
+	ai, ok := peer.AuthInfo.(*AuthInfo)
+	if !ok || ai == nil {
+		return AuthInfo{}, false
+	}
+
+	return *ai, ok
 }

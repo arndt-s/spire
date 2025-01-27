@@ -78,10 +78,16 @@ func (h *Handler) FetchJWTSVID(ctx context.Context, req *workload.JWTSVIDRequest
 		}
 	}
 
-	selectors, _, err := h.c.Attestor.Attest(ctx)
+	selectors, brokerSelectors, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return nil, err
+	}
+
+	if brokerSelectors != nil {
+		if err := h.authorizeBroker(log, brokerSelectors); err != nil {
+			return nil, err
+		}
 	}
 
 	log = log.WithField(telemetry.Registered, true)
@@ -117,10 +123,16 @@ func (h *Handler) FetchJWTBundles(_ *workload.JWTBundlesRequest, stream workload
 	ctx := stream.Context()
 	log := rpccontext.Logger(ctx)
 
-	selectors, _, err := h.c.Attestor.Attest(ctx)
+	selectors, brokerSelectors, err := h.c.Attestor.Attest(ctx)
 	if err != nil {
 		log.WithError(err).Error("Workload attestation failed")
 		return err
+	}
+
+	if brokerSelectors != nil {
+		if err := h.authorizeBroker(log, brokerSelectors); err != nil {
+			return err
+		}
 	}
 
 	subscriber, err := h.c.Manager.SubscribeToCacheChanges(ctx, selectors)

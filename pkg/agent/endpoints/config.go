@@ -45,6 +45,8 @@ type Config struct {
 
 	TrustDomain spiffeid.TrustDomain
 
+	AuthorizedDelegates []string
+
 	// Hooks used by the unit tests to assert that the configuration provided
 	// to each handler is correct and return fake handlers.
 	newWorkloadAPIServer func(workload.Config) workload_pb.SpiffeWorkloadAPIServer

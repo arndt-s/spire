@@ -1403,7 +1403,7 @@ func (c FakeCreds) ClientHandshake(context.Context, string, net.Conn) (net.Conn,
 }
 
 func (c FakeCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return conn, peertracker.AuthInfo{Watcher: FakeWatcher{}}, nil
+	return conn, &peertracker.AuthInfo{Watcher: FakeWatcher{}}, nil
 }
 
 func (c FakeCreds) Info() credentials.ProtocolInfo {

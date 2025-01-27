@@ -74,11 +74,11 @@ func TestListener(t *testing.T) {
 	require.True(t, ok)
 
 	// Ensure we resolved the PID ok
-	require.Equal(t, int32(os.Getpid()), conn.Info.Caller.PID)
+	require.Equal(t, int32(os.Getpid()), conn.Info().Caller.PID)
 
 	// Ensure watcher is set up correctly
-	require.NotNil(t, conn.Info.Watcher)
-	require.Equal(t, int32(os.Getpid()), conn.Info.Watcher.PID())
+	require.NotNil(t, conn.Info().Watcher)
+	require.Equal(t, int32(os.Getpid()), conn.Info().Watcher.PID())
 
 	peer.disconnect()
 	conn.Close()
@@ -103,12 +103,12 @@ func TestExitDetection(t *testing.T) {
 	require.True(t, ok)
 
 	// We're connected to ourselves - we should be alive!
-	require.NoError(t, conn.Info.Watcher.IsAlive())
+	require.NoError(t, conn.Info().Watcher.IsAlive())
 
 	// Should return an error once we're no longer tracking
 	peer.disconnect()
 	conn.Close()
-	require.EqualError(t, conn.Info.Watcher.IsAlive(), "caller is no longer being watched")
+	require.EqualError(t, conn.Info().Watcher.IsAlive(), "caller is no longer being watched")
 
 	// Start a forking child and allow it to exit while the grandchild holds the socket
 	peer.connectFromForkingChild(test.addr, test.childPath, doneCh)
@@ -131,7 +131,7 @@ func TestExitDetection(t *testing.T) {
 	// Call to IsAlive should now return an error
 	switch runtime.GOOS {
 	case "darwin":
-		require.EqualError(t, conn.Info.Watcher.IsAlive(), "caller exit detected via kevent notification")
+		require.EqualError(t, conn.Info().Watcher.IsAlive(), "caller exit detected via kevent notification")
 		require.Len(t, test.logHook.Entries, 2)
 		firstEntry := test.logHook.Entries[0]
 		require.Equal(t, logrus.WarnLevel, firstEntry.Level)
@@ -140,7 +140,7 @@ func TestExitDetection(t *testing.T) {
 		require.Equal(t, logrus.WarnLevel, secondEntry.Level)
 		require.Equal(t, "Caller exit detected via kevent notification", secondEntry.Message)
 	case "linux":
-		require.EqualError(t, conn.Info.Watcher.IsAlive(), "caller exit suspected due to failed readdirent")
+		require.EqualError(t, conn.Info().Watcher.IsAlive(), "caller exit suspected due to failed readdirent")
 		require.Len(t, test.logHook.Entries, 2)
 		firstEntry := test.logHook.Entries[0]
 		require.Equal(t, logrus.WarnLevel, firstEntry.Level)
@@ -150,7 +150,7 @@ func TestExitDetection(t *testing.T) {
 		require.Equal(t, "Caller exit suspected due to failed readdirent", secondEntry.Message)
 		requireCallerExitFailedDirent(t, secondEntry.Data["error"])
 	case "windows":
-		require.EqualError(t, conn.Info.Watcher.IsAlive(), "caller exit detected: exit code: 0")
+		require.EqualError(t, conn.Info().Watcher.IsAlive(), "caller exit detected: exit code: 0")
 		require.Len(t, test.logHook.Entries, 2)
 		firstEntry := test.logHook.Entries[0]
 		require.Equal(t, logrus.WarnLevel, firstEntry.Level)
@@ -174,7 +174,7 @@ func TestExitDetection(t *testing.T) {
 	// the tracker has been closed
 	test.listener.Close()
 	test.listener = nil
-	require.EqualError(t, conn.Info.Watcher.IsAlive(), "caller is no longer being watched")
+	require.EqualError(t, conn.Info().Watcher.IsAlive(), "caller is no longer being watched")
 }
 
 func newFakePeer(t *testing.T) *fakePeer {

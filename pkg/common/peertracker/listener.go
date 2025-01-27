@@ -60,22 +60,16 @@ func (l *Listener) Accept() (net.Conn, error) {
 			continue
 		}
 
-		wrappedConn := &Conn{
-			Conn: conn,
-			Info: AuthInfo{
-				Caller:  caller,
-				Watcher: closeOnIsAliveErr{Watcher: watcher, conn: conn},
-			},
+		info := AuthInfo{
+			Caller:  caller,
+			Watcher: closeOnIsAliveErr{Watcher: watcher, conn: conn},
 		}
 
-		if unixConn, ok := conn.(*net.UnixConn); ok {
-			return &UnixConn{
-				Conn:     wrappedConn,
-				unixConn: unixConn,
-			}, nil
-		}
-
-		return wrappedConn, nil
+		return &Conn{
+			Conn:       conn,
+			info:       info,
+			newWatcher: l.Tracker.NewWatcher,
+		}, nil
 	}
 }
 

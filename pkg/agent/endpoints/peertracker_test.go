@@ -46,7 +46,7 @@ func (a FakeAttestor) Attest(_ context.Context, pid int) ([]*common.Selector, er
 
 func WithFakeWatcher(alive bool) context.Context {
 	return peer.NewContext(context.Background(), &peer.Peer{
-		AuthInfo: peertracker.AuthInfo{
+		AuthInfo: &peertracker.AuthInfo{
 			Watcher: FakeWatcher(alive),
 		},
 	})

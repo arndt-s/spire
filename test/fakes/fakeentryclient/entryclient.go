@@ -88,7 +88,7 @@ func (fakeTransportCreds) ClientHandshake(_ context.Context, _ string, conn net.
 }
 
 func (fakeTransportCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return conn, peertracker.AuthInfo{}, nil
+	return conn, &peertracker.AuthInfo{}, nil
 }
 
 func (fakeTransportCreds) Info() credentials.ProtocolInfo {

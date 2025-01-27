@@ -68,6 +68,7 @@ func New(c Config) *Endpoints {
 		AllowUnauthenticatedVerifiers: c.AllowUnauthenticatedVerifiers,
 		AllowedForeignJWTClaims:       allowedClaims,
 		TrustDomain:                   c.TrustDomain,
+		AuthorizedDelegates:           c.AuthorizedDelegates,
 	})
 
 	sdsv3Server := c.newSDSv3Server(sdsv3.Config{

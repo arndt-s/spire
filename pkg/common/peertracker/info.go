@@ -2,11 +2,15 @@ package peertracker
 
 import (
 	"net"
+
+	"google.golang.org/grpc/credentials"
 )
 
 const (
 	authType = "spire-attestation"
 )
+
+var _ credentials.AuthInfo = (*AuthInfo)(nil)
 
 type CallerInfo struct {
 	Addr net.Addr
@@ -23,6 +27,6 @@ type AuthInfo struct {
 
 // AuthType returns the authentication type and allows us to
 // conform to the gRPC AuthInfo interface
-func (AuthInfo) AuthType() string {
+func (*AuthInfo) AuthType() string {
 	return authType
 }
