@@ -2,3 +2,4 @@ FROM ubuntu:xenial
 WORKDIR /spire
 RUN apt-get update && apt-get -y install \
     curl unzip git build-essential ca-certificates libssl-dev
+RUN curl -L https://github.com/fullstorydev/grpcurl/releases/download/v1.8.7/grpcurl_1.8.7_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin

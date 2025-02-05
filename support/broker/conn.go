@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"syscall"
 
@@ -26,13 +27,14 @@ func (c *Conn) Write(b []byte) (int, error) {
 	if fdInfo, ok := c.info.(fdAuthInfo); ok {
 		c.log.WithField("fd", fdInfo.Fd).Info("Sending SCM_RIGHTS")
 		n, oobn, err = writeFileDescriptor(c.UnixConn, b, fdInfo.Fd)
-	}
-	if creds, ok := c.info.(credsAuthInfo); ok {
+	} else if creds, ok := c.info.(credsAuthInfo); ok {
 		c.log.
 			WithField("pid", creds.PID).
 			WithField("uid", creds.UID).
 			WithField("gid", creds.GID).Info("Sending SCM_CREDS")
 		n, oobn, err = writeCreds(c.UnixConn, b, creds.PID, creds.UID, creds.GID)
+	} else {
+		return 0, errors.New("unsupported auth info type")
 	}
 
 	if err == nil && oobn > 0 {
@@ -40,6 +42,11 @@ func (c *Conn) Write(b []byte) (int, error) {
 	}
 
 	return n, err
+}
+
+func (c *Conn) Close() error {
+	c.log.Info("Closing agent connection")
+	return c.UnixConn.Close()
 }
 
 func writeFileDescriptor(unixConn *net.UnixConn, b []byte, fd uintptr) (int, int, error) {

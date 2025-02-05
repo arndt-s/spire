@@ -83,3 +83,11 @@ ARG spiregid=1000
 USER ${spireuid}:${spiregid}
 ENTRYPOINT ["/opt/spire/bin/oidc-discovery-provider"]
 COPY --link --from=builder --chown=${spireuid}:${spiregid} --chmod=755 /spire/bin/static/oidc-discovery-provider /opt/spire/bin/
+
+# Broker
+FROM spire-base AS broker
+ARG spireuid=0
+ARG spiregid=0
+USER ${spireuid}:${spiregid}
+ENTRYPOINT ["/opt/spire/bin/broker"]
+COPY --link --from=builder --chown=${spireuid}:${spiregid} --chmod=755 /spire/bin/static/broker /opt/spire/bin/

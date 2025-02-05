@@ -69,6 +69,10 @@ func (l *Listener) Accept() (net.Conn, error) {
 			Conn:       conn,
 			info:       info,
 			newWatcher: l.Tracker.NewWatcher,
+			log: l.log.
+				WithField("caller_pid", caller.PID).
+				WithField("caller_address", caller.Addr.String()).
+				WithField("caller_uid", caller.UID),
 		}, nil
 	}
 }

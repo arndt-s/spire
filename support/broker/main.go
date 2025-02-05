@@ -7,12 +7,12 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/gogo/status"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/proto/spiffe/workload"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -22,76 +22,94 @@ import (
 )
 
 const (
-	agentSocketPath = "/tmp/spire-agent/public/api.sock"
-	brokerSocketDir = "/tmp/spire-broker/public"
-	networkUnix     = "unix"
-	networkTcp      = "tcp"
-	brokerPort      = 8080
+	defaultAgentSocketPath  = "/run/spire/sockets/agent.sock"
+	defaultBrokerSocketPath = "/run/spire/sockets/broker.sock"
+	networkUnix             = "unix"
+	networkTcp              = "tcp"
+	brokerPort              = 8080
 )
 
-var brokerSocketPath = fmt.Sprintf("%s/api.sock", brokerSocketDir)
 var loopbackIP = net.ParseIP("127.0.0.1")
 
 func main() {
 	log := logrus.StandardLogger()
-	if err := runBroker(log); err != nil {
+
+	agentSock := os.Getenv("AGENT_SOCK")
+	if agentSock == "" {
+		agentSock = defaultAgentSocketPath
+	}
+	brokerSock := os.Getenv("BROKER_SOCK")
+	if brokerSock == "" {
+		brokerSock = defaultBrokerSocketPath
+	}
+
+	if err := runBroker(log, agentSock, brokerSock); err != nil {
 		log.Fatalf("Error running broker: %v", err)
 	}
 }
 
-func runBroker(log logrus.FieldLogger) error {
+func runBroker(log logrus.FieldLogger, agentSock string, brokerSock string) error {
 	wlServer := BrokeringWorkloadAPIServer{
-		log: log,
+		log:       log,
+		agentSock: agentSock,
 	}
-	s := grpc.NewServer(grpc.Creds(TransportCredential{log: log}))
+	creds := grpc.Creds(TransportCredential{log: log})
+	s := grpc.NewServer(creds)
 	workload.RegisterSpiffeWorkloadAPIServer(s, &wlServer)
 	reflection.Register(s)
 
-	errg := new(errgroup.Group)
-	errg.Go(func() error {
-		if err := os.MkdirAll(brokerSocketDir, 0777); err != nil {
-			return fmt.Errorf("failed to create broker directory: %v", err)
+	sockErr := make(chan error, 1)
+	go func() {
+
+		if err := os.MkdirAll(filepath.Dir(brokerSock), 0777); err != nil {
+			sockErr <- fmt.Errorf("failed to create broker directory: %v", err)
+			return
 		}
 
-		os.Remove(brokerSocketPath)
-		listener, err := net.ListenUnix(networkUnix, &net.UnixAddr{Name: brokerSocketPath, Net: networkUnix})
+		os.Remove(brokerSock)
+		listener, err := net.ListenUnix(networkUnix, &net.UnixAddr{Name: brokerSock, Net: networkUnix})
 		if err != nil {
-			return fmt.Errorf("failed to listen on %s: %v", agentSocketPath, err)
+			sockErr <- fmt.Errorf("failed to listen on %s: %v", brokerSock, err)
 		}
 
-		log.WithField("socket", brokerSocketPath).Info("Starting broker on UDS")
+		log.WithField("socket", brokerSock).Info("Starting broker on UDS")
 		if err := s.Serve(listener); err != nil {
-			return fmt.Errorf("failed to serve: %v", err)
+			sockErr <- fmt.Errorf("failed to serve: %v", err)
 		}
+	}()
 
-		return nil
-	})
-
-	errg.Go(func() error {
+	tcpErr := make(chan error, 1)
+	go func() {
 		l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: loopbackIP, Port: brokerPort})
 		if err != nil {
-			return fmt.Errorf("failed to listen on TCP: %v", err)
+			tcpErr <- fmt.Errorf("failed to listen on TCP: %v", err)
 		}
 
 		log.WithField("port", brokerPort).Info("Starting broker on TCP")
 		if err := s.Serve(l); err != nil {
-			return fmt.Errorf("failed to serve: %v", err)
+			tcpErr <- fmt.Errorf("failed to serve: %v", err)
 		}
+	}()
 
-		return nil
-	})
-
-	return errg.Wait()
+	select {
+	case err := <-sockErr:
+		log.WithError(err).Error("Broker failed serving on UDS")
+		return err
+	case err := <-tcpErr:
+		log.WithError(err).Error("Broker failed serving on TCP")
+		return err
+	}
 }
 
 type BrokeringWorkloadAPIServer struct {
 	workload.UnimplementedSpiffeWorkloadAPIServer
-	log logrus.FieldLogger
+	agentSock string
+	log       logrus.FieldLogger
 }
 
 func (s *BrokeringWorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workload.JWTSVIDRequest) (*workload.JWTSVIDResponse, error) {
-	wlc, close, err := s.newWorkloadClient(ctx)
-	defer close()
+	wlc, _, err := s.newWorkloadClient(ctx)
+	//defer close()
 	if err != nil {
 		s.log.WithError(err).Error("Failed to create workload client")
 		return nil, fmt.Errorf("failed to create workload client: %w", err)
@@ -111,8 +129,8 @@ func (s *BrokeringWorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *work
 
 func (s *BrokeringWorkloadAPIServer) FetchJWTBundles(req *workload.JWTBundlesRequest, srv workload.SpiffeWorkloadAPI_FetchJWTBundlesServer) error {
 	ctx := srv.Context()
-	wlc, close, err := s.newWorkloadClient(ctx)
-	defer close()
+	wlc, _, err := s.newWorkloadClient(ctx)
+	//defer close()
 	if err != nil {
 		s.log.WithError(err).Error("Failed to create workload client")
 		return fmt.Errorf("failed to create workload client: %w", err)
@@ -157,9 +175,10 @@ func (s *BrokeringWorkloadAPIServer) newWorkloadClient(ctx context.Context) (wor
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			unixConn, err := net.DialUnix(networkUnix, nil, &net.UnixAddr{Name: agentSocketPath, Net: networkUnix})
+			s.log.Info("Dialing agent")
+			unixConn, err := net.DialUnix(networkUnix, nil, &net.UnixAddr{Name: s.agentSock, Net: networkUnix})
 			if err != nil {
-				s.log.WithError(err).Error("Failed to dial agent")
+				s.log.WithField("agent_socket", s.agentSock).WithError(err).Error("Failed to dial agent")
 				return nil, fmt.Errorf("failed to dial: %w", err)
 			}
 			// TODO: is this necessary?
@@ -175,7 +194,7 @@ func (s *BrokeringWorkloadAPIServer) newWorkloadClient(ctx context.Context) (wor
 			}, nil
 		}),
 	}
-	c, err := grpc.NewClient(fmt.Sprintf("%s://%s", networkUnix, agentSocketPath), opts...)
+	c, err := grpc.NewClient(fmt.Sprintf("%s://%s", networkUnix, s.agentSock), opts...)
 	if err != nil {
 		return nil, noopClose, fmt.Errorf("failed to create client: %w", err)
 	}

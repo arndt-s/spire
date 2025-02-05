@@ -51,6 +51,7 @@ help:
 	@echo "  $(cyan)spire-server-image$(reset)                    - build SPIRE server Docker image"
 	@echo "  $(cyan)spire-agent-image$(reset)                     - build SPIRE agent Docker image"
 	@echo "  $(cyan)oidc-discovery-provider-image$(reset)         - build OIDC Discovery Provider Docker image"
+	@echo "  $(cyan)broker-image$(reset)         				  - build broker Docker image"
 	@echo "$(bold)Windows docker image:$(reset)"
 	@echo "  $(cyan)images-windows$(reset)                        - build all SPIRE Docker images for windows"
 	@echo "  $(cyan)spire-server-image-windows$(reset)            - build SPIRE server Docker image for windows"
@@ -115,9 +116,9 @@ endif
 # Vars
 ############################################################################
 
-PLATFORMS ?= linux/amd64,linux/arm64
+PLATFORMS ?= linux/arm64
 
-binaries := spire-server spire-agent oidc-discovery-provider
+binaries := spire-server spire-agent oidc-discovery-provider broker
 
 build_dir := $(DIR)/.build/$(os1)-$(arch1)
 
@@ -338,8 +339,9 @@ $1: $3 container-builder
 		--build-arg goversion=$(go_version) \
 		--build-arg TAG=$(TAG) \
 		--target $2 \
-		-o type=oci,dest=$2-image.tar \
 		-f $3 \
+		-t $2 \
+		--load \
 		.
 
 endef
@@ -347,17 +349,18 @@ endef
 $(eval $(call image_rule,spire-server-image,spire-server,Dockerfile))
 $(eval $(call image_rule,spire-agent-image,spire-agent,Dockerfile))
 $(eval $(call image_rule,oidc-discovery-provider-image,oidc-discovery-provider,Dockerfile))
+$(eval $(call image_rule,broker-image,broker,Dockerfile))
 
 .PHONY: images-no-load
 images-no-load: $(addsuffix -image,$(binaries))
 
 .PHONY: images
 images: images-no-load
-	.github/workflows/scripts/load-oci-archives.sh
+# .github/workflows/scripts/load-oci-archives.sh
 
 .PHONY: load-images
 load-images:
-	.github/workflows/scripts/load-oci-archives.sh
+# .github/workflows/scripts/load-oci-archives.sh
 
 #############################################################################
 # Windows Docker Images
