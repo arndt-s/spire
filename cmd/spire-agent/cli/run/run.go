@@ -97,6 +97,8 @@ type agentConfig struct {
 
 	AuthorizedDelegates []string `hcl:"authorized_delegates"`
 
+	KubernetesTokenSigner *kubernetesTokenSignerConfig `hcl:"kubernetes_token_signer"`
+
 	ConfigPath string
 	ExpandEnv  bool
 
@@ -125,6 +127,14 @@ type experimentalConfig struct {
 	RequirePQKEM             bool   `hcl:"require_pq_kem"`
 
 	Flags fflag.RawConfig `hcl:"feature_flags"`
+}
+
+type kubernetesTokenSignerConfig struct {
+	Enabled           bool     `hcl:"enabled"`
+	SocketPath        string   `hcl:"socket_path"`
+	AllowedSPIFFEIDs  []string `hcl:"allowed_spiffe_ids"`
+	MaxTokenLifetime  string   `hcl:"max_token_lifetime"`
+	KeyRefreshHint    string   `hcl:"key_refresh_hint"`
 }
 
 type Command struct {
@@ -598,6 +608,17 @@ func NewAgentConfig(c *Config, logOptions []log.Option, allowUnknownConfig bool)
 	}
 
 	tlspolicy.LogPolicy(ac.TLSPolicy, log.NewHCLogAdapter(logger, "tlspolicy"))
+
+	// Map Kubernetes token signer configuration
+	if c.Agent.KubernetesTokenSigner != nil {
+		ac.KubernetesTokenSigner = &agent.KubernetesTokenSignerConfig{
+			Enabled:           c.Agent.KubernetesTokenSigner.Enabled,
+			SocketPath:        c.Agent.KubernetesTokenSigner.SocketPath,
+			AllowedSPIFFEIDs:  c.Agent.KubernetesTokenSigner.AllowedSPIFFEIDs,
+			MaxTokenLifetime:  c.Agent.KubernetesTokenSigner.MaxTokenLifetime,
+			KeyRefreshHint:    c.Agent.KubernetesTokenSigner.KeyRefreshHint,
+		}
+	}
 
 	if cmp.Diff(experimentalConfig{}, c.Agent.Experimental) != "" {
 		logger.Warn("Experimental features have been enabled. Please see doc/upgrading.md for upgrade and compatibility considerations for experimental features.")

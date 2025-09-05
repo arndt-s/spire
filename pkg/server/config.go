@@ -124,6 +124,9 @@ type Config struct {
 
 	// TLSPolicy determines the policy settings to apply to all TLS connections.
 	TLSPolicy tlspolicy.Policy
+
+	// KubernetesTokenSigner configuration
+	KubernetesTokenSigner *endpoints.KubernetesTokenSignerConfig
 }
 
 type ExperimentalConfig struct {

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"time"
 
@@ -107,6 +108,57 @@ type Config struct {
 
 	// TLSPolicy determines the post-quantum-safe TLS policy to apply to all TLS connections.
 	TLSPolicy tlspolicy.Policy
+
+	// KubernetesTokenSigner configuration for external JWT signer service
+	KubernetesTokenSigner *KubernetesTokenSignerConfig
+}
+
+// KubernetesTokenSignerConfig configures the Kubernetes token signer service
+type KubernetesTokenSignerConfig struct {
+	Enabled           bool     `hcl:"enabled"`
+	SocketPath        string   `hcl:"socket_path"`
+	AllowedSPIFFEIDs  []string `hcl:"allowed_spiffe_ids"`
+	MaxTokenLifetime  string   `hcl:"max_token_lifetime"`
+	KeyRefreshHint    string   `hcl:"key_refresh_hint"`
+}
+
+func (c *KubernetesTokenSignerConfig) maxTokenLifetimeDuration() time.Duration {
+	if c.MaxTokenLifetime == "" {
+		return time.Hour // default
+	}
+	d, _ := time.ParseDuration(c.MaxTokenLifetime)
+	return d
+}
+
+func (c *KubernetesTokenSignerConfig) keyRefreshHintDuration() time.Duration {
+	if c.KeyRefreshHint == "" {
+		return 5 * time.Minute // default
+	}
+	d, _ := time.ParseDuration(c.KeyRefreshHint)
+	return d
+}
+
+func (c *KubernetesTokenSignerConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	if c.SocketPath == "" {
+		return fmt.Errorf("socket_path is required when kubernetes_token_signer is enabled")
+	}
+
+	if len(c.AllowedSPIFFEIDs) == 0 {
+		return fmt.Errorf("allowed_spiffe_ids must contain at least one SPIFFE ID")
+	}
+
+	// Validate SPIFFE IDs format
+	for _, id := range c.AllowedSPIFFEIDs {
+		if _, err := spiffeid.FromString(id); err != nil {
+			return fmt.Errorf("invalid SPIFFE ID %s: %v", id, err)
+		}
+	}
+
+	return nil
 }
 
 func New(c *Config) *Agent {

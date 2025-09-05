@@ -37,6 +37,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	// Add import for Kubernetes token signer
+	"github.com/spiffe/spire/pkg/agent/kubernetes"
+	kubernetestokenv1 "github.com/spiffe/spire/proto/spire/server/kubernetestoken/v1"
 )
 
 const (
@@ -163,6 +167,35 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	endpoints := a.newEndpoints(metrics, manager, workloadAttestor)
 
+	// Initialize Kubernetes token signer if enabled
+	var kubernetesTokenSigner *kubernetes.Server
+	var serverConn *grpc.ClientConn
+	if a.c.KubernetesTokenSigner != nil && a.c.KubernetesTokenSigner.Enabled {
+		if err := a.c.KubernetesTokenSigner.Validate(); err != nil {
+			return fmt.Errorf("invalid kubernetes_token_signer configuration: %w", err)
+		}
+
+		// Create server client for communicating with SPIRE server
+		// For now, we'll create a simple client connection, but this should be optimized
+		serverConn, err = grpc.Dial(a.c.ServerAddress,
+			grpc.WithInsecure(), // TODO: Configure proper mTLS using agent SVID
+		)
+		if err != nil {
+			return fmt.Errorf("failed to connect to SPIRE server for Kubernetes token signer: %w", err)
+		}
+
+		serverClient := kubernetestokenv1.NewKubernetesTokenClient(serverConn)
+		
+		kubernetesConfig := &kubernetes.Config{
+			SocketPath:       a.c.KubernetesTokenSigner.SocketPath,
+			AllowedSPIFFEIDs: a.c.KubernetesTokenSigner.AllowedSPIFFEIDs,
+			MaxTokenLifetime: a.c.KubernetesTokenSigner.maxTokenLifetimeDuration(),
+			KeyRefreshHint:   a.c.KubernetesTokenSigner.keyRefreshHintDuration(),
+		}
+
+		kubernetesTokenSigner = kubernetes.New(kubernetesConfig, serverClient)
+	}
+
 	if err := healthChecker.AddCheck("agent", a); err != nil {
 		return fmt.Errorf("failed adding healthcheck: %w", err)
 	}
@@ -176,6 +209,11 @@ func (a *Agent) Run(ctx context.Context) error {
 		healthChecker.ListenAndServe,
 	}
 
+	// Add Kubernetes token signer to tasks if enabled
+	if kubernetesTokenSigner != nil {
+		tasks = append(tasks, kubernetesTokenSigner.Start)
+	}
+
 	if a.c.AdminBindAddress != nil {
 		adminEndpoints := a.newAdminEndpoints(metrics, manager, workloadAttestor, a.c.AuthorizedDelegates)
 		tasks = append(tasks, adminEndpoints.ListenAndServe)
@@ -186,6 +224,12 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	err = util.RunTasks(ctx, tasks...)
+	
+	// Cleanup Kubernetes token signer connection if needed
+	if serverConn != nil {
+		serverConn.Close()
+	}
+	
 	if errors.Is(err, context.Canceled) {
 		err = nil
 	}

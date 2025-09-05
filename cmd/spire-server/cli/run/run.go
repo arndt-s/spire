@@ -43,6 +43,7 @@ import (
 	bundleClient "github.com/spiffe/spire/pkg/server/bundle/client"
 	"github.com/spiffe/spire/pkg/server/ca/manager"
 	"github.com/spiffe/spire/pkg/server/credtemplate"
+	"github.com/spiffe/spire/pkg/server/endpoints"
 	"github.com/spiffe/spire/pkg/server/endpoints/bundle"
 	"github.com/spiffe/spire/pkg/server/plugin/keymanager"
 )
@@ -102,6 +103,8 @@ type serverConfig struct {
 	// UseLegacyDownstreamX509CATTL is deprecated and should be removed in SPIRE 1.12.0.
 	UseLegacyDownstreamX509CATTL *bool `hcl:"use_legacy_downstream_x509_ca_ttl"`
 
+	KubernetesTokenSigner *kubernetesTokenSignerConfig `hcl:"kubernetes_token_signer"`
+
 	UnusedKeyPositions map[string][]token.Pos `hcl:",unusedKeyPositions"`
 }
 
@@ -131,6 +134,10 @@ type federationConfig struct {
 	BundleEndpoint     *bundleEndpointConfig          `hcl:"bundle_endpoint"`
 	FederatesWith      map[string]federatesWithConfig `hcl:"federates_with"`
 	UnusedKeyPositions map[string][]token.Pos         `hcl:",unusedKeyPositions"`
+}
+
+type kubernetesTokenSignerConfig struct {
+	Enabled bool `hcl:"enabled"`
 }
 
 type bundleEndpointConfig struct {
@@ -579,6 +586,13 @@ func NewServerConfig(c *Config, logOptions []log.Option, allowUnknownConfig bool
 		// removed in SPIRE 1.12.0.
 		sc.UseLegacyDownstreamX509CATTL = true
 		sc.Log.Info("Using legacy downstream X509 CA TTL calculation by default; this default will change in a future release")
+	}
+
+	// Map Kubernetes token signer configuration
+	if c.Server.KubernetesTokenSigner != nil {
+		sc.KubernetesTokenSigner = &endpoints.KubernetesTokenSignerConfig{
+			Enabled: c.Server.KubernetesTokenSigner.Enabled,
+		}
 	}
 
 	// If the configured TTLs can lead to surprises, then do our best to log an
