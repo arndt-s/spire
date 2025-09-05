@@ -21,6 +21,7 @@ import (
 	debugv1 "github.com/spiffe/spire/pkg/server/api/debug/v1"
 	entryv1 "github.com/spiffe/spire/pkg/server/api/entry/v1"
 	healthv1 "github.com/spiffe/spire/pkg/server/api/health/v1"
+	kubernetestokenv1 "github.com/spiffe/spire/pkg/server/api/kubernetestoken/v1"
 	localauthorityv1 "github.com/spiffe/spire/pkg/server/api/localauthority/v1"
 	loggerv1 "github.com/spiffe/spire/pkg/server/api/logger/v1"
 	svidv1 "github.com/spiffe/spire/pkg/server/api/svid/v1"
@@ -112,6 +113,14 @@ type Config struct {
 	// TLSPolicy determines the post-quantum-safe policy used for all TLS
 	// connections.
 	TLSPolicy tlspolicy.Policy
+
+	// KubernetesTokenSigner configuration
+	KubernetesTokenSigner *KubernetesTokenSignerConfig
+}
+
+// KubernetesTokenSignerConfig configures the Kubernetes token signer service
+type KubernetesTokenSignerConfig struct {
+	Enabled bool
 }
 
 func (c *Config) maybeMakeBundleEndpointServer() (Server, func(context.Context) error) {
@@ -162,7 +171,7 @@ func (c *Config) makeAPIServers(entryFetcher api.AuthorizedEntryFetcher) APIServ
 	ds := c.Catalog.GetDataStore()
 	upstreamPublisher := UpstreamPublisher(c.AuthorityManager)
 
-	return APIServers{
+	apiServers := APIServers{
 		AgentServer: agentv1.New(agentv1.Config{
 			DataStore:   ds,
 			ServerCA:    c.ServerCA,
@@ -212,4 +221,16 @@ func (c *Config) makeAPIServers(entryFetcher api.AuthorizedEntryFetcher) APIServ
 			DataStore:   ds,
 		}),
 	}
+
+	// Add Kubernetes token signer if enabled
+	if c.KubernetesTokenSigner != nil && c.KubernetesTokenSigner.Enabled {
+		// The ServerCA should implement the JWTKeyProvider interface
+		if jwtKeyProvider, ok := c.ServerCA.(kubernetestokenv1.JWTKeyProvider); ok {
+			apiServers.KubernetesTokenServer = kubernetestokenv1.New(jwtKeyProvider)
+		} else {
+			c.Log.Warn("Kubernetes token signer enabled but ServerCA does not support JWT key access")
+		}
+	}
+
+	return apiServers
 }

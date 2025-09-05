@@ -29,6 +29,7 @@ import (
 	loggerv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/logger/v1"
 	svidv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/svid/v1"
 	trustdomainv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/trustdomain/v1"
+	kubernetestokenv1 "github.com/spiffe/spire/proto/spire/server/kubernetestoken/v1"
 	"github.com/spiffe/spire/pkg/common/auth"
 	"github.com/spiffe/spire/pkg/common/peertracker"
 	"github.com/spiffe/spire/pkg/common/telemetry"
@@ -98,6 +99,8 @@ type APIServers struct {
 	SVIDServer           svidv1.SVIDServer
 	TrustDomainServer    trustdomainv1.TrustDomainServer
 	LocalAUthorityServer localauthorityv1.LocalAuthorityServer
+	// KubernetesTokenServer is optional and only present when enabled
+	KubernetesTokenServer interface{} // Will be kubernetestokenv1.KubernetesTokenServer
 }
 
 // RateLimitConfig holds rate limiting configurations.
@@ -206,6 +209,14 @@ func (e *Endpoints) ListenAndServe(ctx context.Context) error {
 	trustdomainv1.RegisterTrustDomainServer(udsServer, e.APIServers.TrustDomainServer)
 	localauthorityv1.RegisterLocalAuthorityServer(tcpServer, e.APIServers.LocalAUthorityServer)
 	localauthorityv1.RegisterLocalAuthorityServer(udsServer, e.APIServers.LocalAUthorityServer)
+
+	// Kubernetes token signer (only on TCP/UDS for agent communication, if enabled)
+	if e.APIServers.KubernetesTokenServer != nil {
+		if kubernetesTokenService, ok := e.APIServers.KubernetesTokenServer.(kubernetestokenv1.KubernetesTokenServer); ok {
+			kubernetestokenv1.RegisterKubernetesTokenServer(tcpServer, kubernetesTokenService)
+			kubernetestokenv1.RegisterKubernetesTokenServer(udsServer, kubernetesTokenService)
+		}
+	}
 
 	// UDS only
 	loggerv1.RegisterLoggerServer(udsServer, e.APIServers.LoggerServer)
