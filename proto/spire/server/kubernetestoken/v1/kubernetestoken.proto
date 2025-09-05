@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package spire.server.kubernetestoken.v1;
+
+option go_package = "github.com/spiffe/spire/proto/spire/server/kubernetestoken/v1;kubernetestokenv1";
+
+service KubernetesToken {
+    rpc SignJWT(SignJWTRequest) returns (SignJWTResponse);
+    rpc GetPublicKeys(GetPublicKeysRequest) returns (GetPublicKeysResponse);
+}
+
+message SignJWTRequest {
+    // URL-safe base64 encoded JWT payload
+    string payload = 1;
+}
+
+message SignJWTResponse {
+    // URL-safe base64 encoded JWT header
+    string header = 1;
+    // URL-safe base64 encoded signature
+    string signature = 2;
+}
+
+message GetPublicKeysRequest {}
+
+message GetPublicKeysResponse {
+    repeated PublicKey keys = 1;
+}
+
+message PublicKey {
+    string key_id = 1;
+    bytes key = 2;
+}

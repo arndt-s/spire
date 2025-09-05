@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package spire.agent.kubernetes.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/spiffe/spire/proto/spire/agent/kubernetes/v1;kubernetesv1";
+
+// ExternalJWTSigner service implements Kubernetes external JWT signer API
+service ExternalJWTSigner {
+    rpc Metadata(MetadataRequest) returns (MetadataResponse);
+    rpc FetchKeys(FetchKeysRequest) returns (FetchKeysResponse);
+    rpc Sign(SignJWTRequest) returns (SignJWTResponse);
+}
+
+message MetadataRequest {}
+
+message MetadataResponse {
+    int64 max_token_expiration_seconds = 1;
+}
+
+message FetchKeysRequest {}
+
+message FetchKeysResponse {
+    repeated Key keys = 1;
+    google.protobuf.Timestamp data_timestamp = 2;
+    int64 refresh_hint_seconds = 3;
+}
+
+message Key {
+    string key_id = 1;
+    bytes key = 2;
+    bool exclude_from_oidc_discovery = 3;
+}
+
+message SignJWTRequest {
+    string claims = 1;
+}
+
+message SignJWTResponse {
+    string header = 1;
+    string signature = 2;
+}

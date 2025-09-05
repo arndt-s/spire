@@ -190,6 +190,8 @@ plugin-protos := \
 	proto/spire/common/plugin/plugin.proto
 
 service-protos := \
+	proto/spire/agent/kubernetes/v1/kubernetes.proto \
+	proto/spire/server/kubernetestoken/v1/kubernetestoken.proto \
 
 # The following vars are used in rule construction
 comma := ,
